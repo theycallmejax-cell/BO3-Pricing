@@ -27,4 +27,4 @@ jobs:
           SHOPIFY_CLI_TTY: "0"
           NO_COLOR: "1"
           CI: "true"
-        run: shopify app deploy --force --no-color --client-id b6ef0586e8f3f9038f0397c65d866dbd
+        run: shopify app deploy --force --no-color
