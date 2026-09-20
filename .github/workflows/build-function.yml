@@ -9,20 +9,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Rust + wasm target
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: wasm32-unknown-unknown
-
-      - name: Cache Rust
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            extensions/bo3-multiples-pricing/target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
@@ -34,20 +20,11 @@ jobs:
       - name: Install root dependencies
         run: npm install --ignore-scripts
 
-      - name: Build function
-        env:
-          SHOPIFY_CLI_PARTNERS_TOKEN: ${{ secrets.SHOPIFY_CLI_PARTNERS_TOKEN }}
-          SHOPIFY_FLAG_STORE: td5h8u-tb.myshopify.com
-        run: shopify app build --no-color
-
-      - name: Upload dist artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: bo3-function-dist
-          path: extensions/bo3-multiples-pricing/dist/
-
       - name: Deploy to Shopify
         env:
           SHOPIFY_CLI_PARTNERS_TOKEN: ${{ secrets.SHOPIFY_CLI_PARTNERS_TOKEN }}
           SHOPIFY_FLAG_STORE: td5h8u-tb.myshopify.com
-        run: shopify app deploy --force --no-color
+          SHOPIFY_CLI_TTY: "0"
+          NO_COLOR: "1"
+          CI: "true"
+        run: shopify app deploy --force --no-color --client-id b6ef0586e8f3f9038f0397c65d866dbd
