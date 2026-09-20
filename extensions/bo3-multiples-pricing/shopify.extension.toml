@@ -7,8 +7,6 @@ handle = "bo3-multiples-pricing"
 uid = "bdb5cd28-f5fa-6244-7978-1b1f1faee54f462d18bc"
 description = "Applies cost-price discount on additional units for eligible multiples families."
 
-[e
-c
 [[extensions.targeting]]
 target = "purchase.cart-transform.run"
 input_query = "src/run.graphql"
