@@ -18,7 +18,7 @@ jobs:
         run: npm install -g @shopify/cli@latest
 
       - name: Install root dependencies
-        run: npm install --ignore-scripts
+        run: npm install
 
       - name: Deploy to Shopify
         env:
