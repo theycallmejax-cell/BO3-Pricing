@@ -1,4 +1,4 @@
-name: Build bo3-multiples-pricing Function
+name: Build and Deploy bo3-multiples-pricing
 
 on:
   workflow_dispatch:
@@ -29,12 +29,16 @@ jobs:
           node-version: '20'
 
       - name: Install Shopify CLI
-        run: npm install -g @shopify/cli
+        run: npm install -g @shopify/cli@latest
+
+      - name: Install root dependencies
+        run: npm install --ignore-scripts
 
       - name: Build function
         env:
           SHOPIFY_CLI_PARTNERS_TOKEN: ${{ secrets.SHOPIFY_CLI_PARTNERS_TOKEN }}
-        run: shopify app function build
+          SHOPIFY_FLAG_STORE: td5h8u-tb.myshopify.com
+        run: shopify app build --no-color
 
       - name: Upload dist artifact
         uses: actions/upload-artifact@v4
@@ -45,4 +49,5 @@ jobs:
       - name: Deploy to Shopify
         env:
           SHOPIFY_CLI_PARTNERS_TOKEN: ${{ secrets.SHOPIFY_CLI_PARTNERS_TOKEN }}
-        run: shopify app deploy --force
+          SHOPIFY_FLAG_STORE: td5h8u-tb.myshopify.com
+        run: shopify app deploy --force --no-color
