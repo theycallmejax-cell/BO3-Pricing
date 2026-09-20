@@ -41,3 +41,8 @@ jobs:
         with:
           name: bo3-function-dist
           path: extensions/bo3-multiples-pricing/dist/
+
+      - name: Deploy to Shopify
+        env:
+          SHOPIFY_CLI_PARTNERS_TOKEN: ${{ secrets.SHOPIFY_CLI_PARTNERS_TOKEN }}
+        run: shopify app deploy --force
