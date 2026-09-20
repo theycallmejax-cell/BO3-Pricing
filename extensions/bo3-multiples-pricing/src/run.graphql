@@ -1,0 +1,30 @@
+query RunInput {
+  cart {
+    buyerIdentity {
+      customer {
+        tags
+      }
+    }
+    lines {
+      id
+      quantity
+      merchandise {
+        ... on ProductVariant {
+          id
+          product {
+            id
+            metafield(namespace: "custom", key: "cost_price") {
+              value
+            }
+          }
+        }
+      }
+      cost {
+        amountPerQuantity {
+          amount
+          currencyCode
+        }
+      }
+    }
+  }
+}
