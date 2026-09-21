@@ -1,8 +1,12 @@
 name: Build and Deploy bo3-multiples-pricing
 
 
+
+
 on:
   workflow_dispatch:
+
+
 
 
 jobs:
@@ -12,18 +16,26 @@ jobs:
       - uses: actions/checkout@v4
 
 
+
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: '22'
 
 
+
+
       - name: Install Shopify CLI
         run: npm install -g @shopify/cli@latest
 
 
+
+
       - name: Install root dependencies
         run: npm install
+
+
 
 
       - name: Deploy to Shopify
@@ -33,5 +45,4 @@ jobs:
           SHOPIFY_CLI_TTY: "0"
           NO_COLOR: "1"
           CI: "true"
-        run: shopify app deploy --force --no-color
-
+        run: shopify app deploy --no-color
