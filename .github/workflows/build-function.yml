@@ -22,7 +22,7 @@ jobs:
 
       - name: Deploy to Shopify
         env:
-          SHOPIFY_CLI_PARTNERS_TOKEN: ${{ secrets.SHOPIFY_CLI_PARTNERS_TOKEN }}
+          SHOPIFY_APP_AUTOMATION_TOKEN: ${{ secrets.SHOPIFY_APP_AUTOMATION_TOKEN }}
           SHOPIFY_FLAG_STORE: td5h8u-tb.myshopify.com
           SHOPIFY_CLI_TTY: "0"
           NO_COLOR: "1"
