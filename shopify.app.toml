@@ -1,16 +1,21 @@
 name = "bo3-multiples-pricing"
-client_id = "b6ef0586e8f3f9038f0397c65d866dbd"
+client_id = "2cc12021490fb90566cf2687958590fb"
 application_url = "https://td5h8u-tb.myshopify.com"
 embedded = false
+
 
 [access_scopes]
 scopes = "read_products,read_customers,write_discounts,write_cart_transforms"
 
+
 [auth]
 redirect_urls = ["https://td5h8u-tb.myshopify.com/auth/callback"]
+
 
 [webhooks]
 api_version = "2025-01"
 
+
 [pos]
 embedded = false
+
