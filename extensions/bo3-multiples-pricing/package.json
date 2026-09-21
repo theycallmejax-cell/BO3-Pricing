@@ -1,0 +1,14 @@
+{
+  "name": "bo3-multiples-pricing",
+  "version": "1.0.0",
+  "description": "Shopify Cart Transform Function for multiples families.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "shopify app function build",
+    "preview": "shopify app function run"
+  },
+  "devDependencies": {
+    "@shopify/shopify_function": "^0.2.0"
+  }
+}
