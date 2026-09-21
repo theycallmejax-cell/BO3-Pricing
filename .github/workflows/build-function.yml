@@ -6,6 +6,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
@@ -21,7 +22,7 @@ jobs:
         run: cd extensions/bo3-multiples-pricing && npm install
 
       - name: Install Shopify CLI
-        run: npm install -g @shopify/cli@latest
+        run: npm install -g @shopify/cli@4
 
       - name: Deploy to Shopify
         env:
