@@ -31,4 +31,4 @@ jobs:
           SHOPIFY_CLI_TTY: "0"
           NO_COLOR: "1"
           CI: "true"
-        run: shopify app deploy --allow-updates --force --no-color
+        run: shopify app deploy --allow-updates --no-color
