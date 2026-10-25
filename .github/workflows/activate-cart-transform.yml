@@ -1,7 +1,11 @@
-name: Activate cart transform (manual only)
+name: Activate cart transform
 
-# Manual only. Never runs on push or pull request.
+# Runs only on a push to the activate branch (push only after Cheyne says yes)
+# or by hand with confirm = ACTIVATE. Never on any other branch, push or pull request.
 on:
+  push:
+    branches:
+      - activate
   workflow_dispatch:
     inputs:
       confirm:
@@ -9,9 +13,14 @@ on:
         type: string
         required: true
 
+# Shared with the deploy workflow so the two never overlap.
+concurrency:
+  group: bo3-deploy
+  cancel-in-progress: false
+
 jobs:
   activate:
-    if: ${{ inputs.confirm == 'ACTIVATE' }}
+    if: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/activate') || (github.event_name == 'workflow_dispatch' && inputs.confirm == 'ACTIVATE') }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -24,7 +33,9 @@ jobs:
 
       - name: Activate cart transform
         env:
-          CONFIRM: ${{ inputs.confirm }}
-          SHOPIFY_API_KEY: ${{ secrets.SHOPIFY_API_KEY }}
+          # Push to activate counts as the confirmation; dispatch must have typed ACTIVATE (checked by the job condition and the script).
+          CONFIRM: ${{ github.event_name == 'push' && 'ACTIVATE' || inputs.confirm }}
+          # Public client id of the app, not a secret.
+          SHOPIFY_API_KEY: b6ef0586e8f3f9038f0397c65d866dbd
           SHOPIFY_API_SECRET: ${{ secrets.SHOPIFY_API_SECRET }}
         run: node scripts/activate-cart-transform.mjs

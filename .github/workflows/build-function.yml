@@ -1,11 +1,13 @@
 name: Build and Deploy bo3-multiples-pricing
 
 on:
-  # A push to deploy-ready builds and creates an UNRELEASED app version only.
-  # It can never release to the store; releasing is a manual run with no_release unticked.
+  # push to deploy-ready: builds and creates an UNRELEASED app version (--no-release).
+  # push to release:      RELEASES the app version to the store (--allow-updates). Push only after Cheyne says yes.
+  # manual dispatch:      releases unless no_release is ticked.
   push:
     branches:
       - deploy-ready
+      - release
   workflow_dispatch:
     inputs:
       no_release:
@@ -13,6 +15,11 @@ on:
         type: boolean
         required: false
         default: false
+
+# Two deploys never overlap, and a running deploy is never cancelled mid-way.
+concurrency:
+  group: bo3-deploy
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -59,7 +66,9 @@ jobs:
           SHOPIFY_CLI_TTY: "0"
           NO_COLOR: "1"
           CI: "true"
-          NO_RELEASE: ${{ github.event_name == 'push' || inputs.no_release }}
+          # Fails closed: --no-release unless this run is explicitly a release
+          # (push to the release branch, or a dispatch with no_release unticked).
+          NO_RELEASE: ${{ !((github.event_name == 'push' && github.ref == 'refs/heads/release') || (github.event_name == 'workflow_dispatch' && inputs.no_release == false)) }}
         run: |
           # --no-release and --allow-updates are mutually exclusive in the CLI usage line.
           if [ "$NO_RELEASE" = "true" ]; then

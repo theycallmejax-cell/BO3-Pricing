@@ -23,8 +23,11 @@ if (process.env.CONFIRM !== "ACTIVATE") {
 }
 const clientId = process.env.SHOPIFY_API_KEY;
 const clientSecret = process.env.SHOPIFY_API_SECRET;
-if (!clientId || !clientSecret) {
-  fail("Missing SHOPIFY_API_KEY or SHOPIFY_API_SECRET in the environment.");
+if (!clientSecret) {
+  fail("Missing GitHub secret SHOPIFY_API_SECRET: add it under Settings > Secrets and variables > Actions, then run again.");
+}
+if (!clientId) {
+  fail("Missing SHOPIFY_API_KEY in the environment.");
 }
 
 async function getAccessToken() {
