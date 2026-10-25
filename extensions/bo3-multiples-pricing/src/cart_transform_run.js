@@ -8,9 +8,17 @@
  *   - the output operation is lineExpand (not expand)
  *   - fixedPricePerUnit takes amount only (no currencyCode)
  *   - the at-cost amount is multiplied by presentmentCurrencyRate
+ *
+ * Round 2 (Cheyne, 2026-10-25): allowance is no longer per product. At-cost units
+ * are pooled per eligible collection across all eligible lines (see cartTransformRun).
  */
 
 const DISCOUNT_TITLE = "Multiples Pricing";
+// Collections whose products pool at-cost units (decided by Cheyne 2026-10-25).
+// "The Club Pricing". These IDs must also appear literally in
+// src/cart_transform_run.graphql (inCollections ids); a test fails if they differ.
+export const ELIGIBLE_COLLECTION_IDS = ["gid://shopify/Collection/330356261047"];
+
 const TIERS = [
   { tags: new Set(["twin", "twins", "twin-fam", "amba-twin"]), maxAdditional: 2 },
   { tags: new Set(["triplet", "triplets", "triplet-fam", "amba-triplet"]), maxAdditional: 3 },
@@ -63,6 +71,28 @@ function parseRate(rate) {
 }
 
 /**
+ * Pool key for a product: the first collection in ELIGIBLE_COLLECTION_IDS (constant
+ * order) of which the product is a member, or null if it is in none of them.
+ */
+function poolKeyFor(product) {
+  const memberships = product?.inCollections;
+  if (!Array.isArray(memberships)) return null;
+  for (const id of ELIGIBLE_COLLECTION_IDS) {
+    if (memberships.some((m) => m && m.collectionId === id && m.isMember === true)) return id;
+  }
+  return null;
+}
+
+/**
+ * Pooled collection pricing.
+ * Eligible lines (product in an eligible collection, plus the guards below) share one
+ * pool per eligible collection. Walking lines in order, unit by unit: the first unit in
+ * a pool is full price; after that each unit is at cost until the tier allowance of
+ * at-cost units for that pool is used; units beyond that are full price.
+ * Each at-cost unit is priced at its own line's product cost (times presentmentCurrencyRate).
+ * Guards run BEFORE any pool state is touched: a line failing a guard neither gets a
+ * discount nor uses allowance nor counts as the pool's first unit.
+ *
  * @param {any} input
  * @returns {{ operations: any[] }}
  */
@@ -75,39 +105,51 @@ export function cartTransformRun(input) {
   const rate = parseRate(input.presentmentCurrencyRate);
   if (rate === null) return { operations };
   const lines = input.cart?.lines ?? [];
-  const additionalUsed = new Map();
+  /** @type {Map<string, { started: boolean, used: number }>} */
+  const pools = new Map();
   for (const line of lines) {
     const merchandise = line.merchandise;
     if (!merchandise || merchandise.__typename !== "ProductVariant") continue;
-    const productId = merchandise.product?.id;
-    if (!productId) continue;
+    if (!merchandise.product?.id) continue;
+    const poolKey = poolKeyFor(merchandise.product);
+    if (poolKey === null) continue;
     const lineQty = line.quantity ?? 0;
-    if (lineQty <= 1) continue;
-    const metafieldValue = merchandise.product?.metafield?.value;
-    const costPrice = parseCostPrice(metafieldValue);
+    if (!Number.isInteger(lineQty) || lineQty < 1) continue;
+    const costPrice = parseCostPrice(merchandise.product?.metafield?.value);
     if (!costPrice) continue;
-    const alreadyUsed = additionalUsed.get(productId) ?? 0;
-    const remainingAllowance = maxAdditional - alreadyUsed;
-    if (remainingAllowance <= 0) continue;
-    const additionalInLine = lineQty - 1;
-    const discountableQty = Math.min(additionalInLine, remainingAllowance);
-    additionalUsed.set(productId, alreadyUsed + discountableQty);
     const retailAmount = parseFloat(line.cost?.amountPerQuantity?.amount ?? "0");
     // Cost is converted to the presentment currency before comparing with retail.
     const costAmount = parseFloat(costPrice.amount) * rate;
     if (isNaN(retailAmount) || isNaN(costAmount) || costAmount >= retailAmount) continue;
-    const expandedItems = [];
-    // First unit at full price; at-cost units follow; units beyond the allowance return to full price.
-    expandedItems.push({ merchandiseId: merchandise.id, quantity: 1 });
-    expandedItems.push({
-      merchandiseId: merchandise.id,
-      quantity: discountableQty,
-      price: { adjustment: { fixedPricePerUnit: { amount: costAmount.toFixed(2) } } },
-    });
-    const beyondAllowance = additionalInLine - discountableQty;
-    if (beyondAllowance > 0) {
-      expandedItems.push({ merchandiseId: merchandise.id, quantity: beyondAllowance });
+
+    // Candidate line: walk its units against the pool.
+    const pool = pools.get(poolKey) ?? { started: false, used: 0 };
+    pools.set(poolKey, pool);
+    const groups = []; // run-length groups: { atCost, quantity }
+    let anyAtCost = false;
+    for (let unit = 0; unit < lineQty; unit++) {
+      let atCost;
+      if (!pool.started) {
+        pool.started = true;
+        atCost = false;
+      } else if (pool.used < maxAdditional) {
+        pool.used += 1;
+        atCost = true;
+        anyAtCost = true;
+      } else {
+        atCost = false;
+      }
+      const last = groups[groups.length - 1];
+      if (last && last.atCost === atCost) last.quantity += 1;
+      else groups.push({ atCost, quantity: 1 });
     }
+    if (!anyAtCost) continue;
+    const amount = costAmount.toFixed(2);
+    const expandedItems = groups.map((g) =>
+      g.atCost
+        ? { merchandiseId: merchandise.id, quantity: g.quantity, price: { adjustment: { fixedPricePerUnit: { amount } } } }
+        : { merchandiseId: merchandise.id, quantity: g.quantity },
+    );
     operations.push({
       lineExpand: { cartLineId: line.id, title: DISCOUNT_TITLE, expandedCartItems: expandedItems },
     });

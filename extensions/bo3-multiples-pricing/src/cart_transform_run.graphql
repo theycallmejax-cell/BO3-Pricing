@@ -18,6 +18,10 @@ query CartTransformRunInput {
           id
           product {
             id
+            inCollections(ids: ["gid://shopify/Collection/330356261047"]) {
+              collectionId
+              isMember
+            }
             metafield(namespace: "custom", key: "cost_price") {
               value
             }
