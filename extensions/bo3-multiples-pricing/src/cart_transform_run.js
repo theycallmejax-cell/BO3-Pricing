@@ -1,10 +1,22 @@
 // @ts-check
+
+/**
+ * Ported from src/run.js (pre-port main at 405b190). Pricing behaviour is
+ * unchanged; only the input/output shapes differ, as the current Shopify
+ * Functions API requires:
+ *   - customer tags come from hasTags entries where hasTag is true
+ *   - the output operation is lineExpand (not expand)
+ *   - fixedPricePerUnit takes amount only (no currencyCode)
+ *   - the at-cost amount is multiplied by presentmentCurrencyRate
+ */
+
 const DISCOUNT_TITLE = "Multiples Pricing";
 const TIERS = [
   { tags: new Set(["twin", "twins", "twin-fam", "amba-twin"]), maxAdditional: 2 },
   { tags: new Set(["triplet", "triplets", "triplet-fam", "amba-triplet"]), maxAdditional: 3 },
   { tags: new Set(["amba-quad", "hero", "quad", "quads", "amba", "amba-member"]), maxAdditional: 6 },
 ];
+
 function resolveMaxAdditional(customerTags) {
   if (!customerTags || customerTags.length === 0) return 0;
   const tagSet = new Set(customerTags.map((t) => t.toLowerCase().trim()));
@@ -16,6 +28,7 @@ function resolveMaxAdditional(customerTags) {
   }
   return resolved;
 }
+
 function parseCostPrice(metafieldValue) {
   if (!metafieldValue) return null;
   try {
@@ -28,12 +41,39 @@ function parseCostPrice(metafieldValue) {
     return { amount: amount.trim(), currencyCode: currencyCode.trim() };
   } catch { return null; }
 }
-export function run(input) {
+
+/**
+ * Tags the customer actually holds, from the hasTags query result.
+ * @param {{ tag: string, hasTag: boolean }[] | null | undefined} hasTags
+ * @returns {string[]}
+ */
+function heldTags(hasTags) {
+  return (hasTags ?? []).filter((entry) => entry && entry.hasTag === true).map((entry) => entry.tag);
+}
+
+/**
+ * presentmentCurrencyRate may arrive as a number or a decimal string.
+ * Missing (undefined or null) is treated as 1.0. Present but not a positive
+ * finite number is invalid and yields null.
+ */
+function parseRate(rate) {
+  if (rate === undefined || rate === null) return 1;
+  const n = typeof rate === "number" ? rate : parseFloat(String(rate));
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+/**
+ * @param {any} input
+ * @returns {{ operations: any[] }}
+ */
+export function cartTransformRun(input) {
   const operations = [];
   const customer = input.cart?.buyerIdentity?.customer;
   if (!customer) return { operations };
-  const maxAdditional = resolveMaxAdditional(customer.tags ?? []);
+  const maxAdditional = resolveMaxAdditional(heldTags(customer.hasTags));
   if (maxAdditional === 0) return { operations };
+  const rate = parseRate(input.presentmentCurrencyRate);
+  if (rate === null) return { operations };
   const lines = input.cart?.lines ?? [];
   const additionalUsed = new Map();
   for (const line of lines) {
@@ -54,21 +94,22 @@ export function run(input) {
     const fullPriceQty = lineQty - discountableQty;
     additionalUsed.set(productId, alreadyUsed + discountableQty);
     const retailAmount = parseFloat(line.cost?.amountPerQuantity?.amount ?? "0");
-    const costAmount = parseFloat(costPrice.amount);
+    // Cost is converted to the presentment currency before comparing with retail.
+    const costAmount = parseFloat(costPrice.amount) * rate;
     if (isNaN(retailAmount) || isNaN(costAmount) || costAmount >= retailAmount) continue;
     const expandedItems = [];
     expandedItems.push({ merchandiseId: merchandise.id, quantity: fullPriceQty });
     expandedItems.push({
       merchandiseId: merchandise.id,
       quantity: discountableQty,
-      price: { adjustment: { fixedPricePerUnit: { amount: costPrice.amount, currencyCode: costPrice.currencyCode } } },
+      price: { adjustment: { fixedPricePerUnit: { amount: costAmount.toFixed(2) } } },
     });
     const beyondAllowance = additionalInLine - discountableQty;
     if (beyondAllowance > 0) {
       expandedItems.push({ merchandiseId: merchandise.id, quantity: beyondAllowance });
     }
     operations.push({
-      expand: { cartLineId: line.id, title: DISCOUNT_TITLE, expandedCartItems: expandedItems },
+      lineExpand: { cartLineId: line.id, title: DISCOUNT_TITLE, expandedCartItems: expandedItems },
     });
   }
   return { operations };

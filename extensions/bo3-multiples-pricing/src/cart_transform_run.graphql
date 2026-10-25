@@ -1,14 +1,19 @@
-query RunInput {
+query CartTransformRunInput {
+  presentmentCurrencyRate
   cart {
     buyerIdentity {
       customer {
-        tags
+        hasTags(tags: ["twin", "twins", "twin-fam", "amba-twin", "triplet", "triplets", "triplet-fam", "amba-triplet", "amba-quad", "hero", "quad", "quads", "amba", "amba-member"]) {
+          tag
+          hasTag
+        }
       }
     }
     lines {
       id
       quantity
       merchandise {
+        __typename
         ... on ProductVariant {
           id
           product {
