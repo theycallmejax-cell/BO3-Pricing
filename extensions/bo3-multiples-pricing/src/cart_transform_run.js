@@ -91,14 +91,14 @@ export function cartTransformRun(input) {
     if (remainingAllowance <= 0) continue;
     const additionalInLine = lineQty - 1;
     const discountableQty = Math.min(additionalInLine, remainingAllowance);
-    const fullPriceQty = lineQty - discountableQty;
     additionalUsed.set(productId, alreadyUsed + discountableQty);
     const retailAmount = parseFloat(line.cost?.amountPerQuantity?.amount ?? "0");
     // Cost is converted to the presentment currency before comparing with retail.
     const costAmount = parseFloat(costPrice.amount) * rate;
     if (isNaN(retailAmount) || isNaN(costAmount) || costAmount >= retailAmount) continue;
     const expandedItems = [];
-    expandedItems.push({ merchandiseId: merchandise.id, quantity: fullPriceQty });
+    // First unit at full price; at-cost units follow; units beyond the allowance return to full price.
+    expandedItems.push({ merchandiseId: merchandise.id, quantity: 1 });
     expandedItems.push({
       merchandiseId: merchandise.id,
       quantity: discountableQty,

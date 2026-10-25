@@ -1,5 +1,17 @@
 import { describe, it, expect } from "vitest";
-import { cartTransformRun } from "../src/cart_transform_run.js";
+import { cartTransformRun as cartTransformRunRaw } from "../src/cart_transform_run.js";
+
+// Every call in this file goes through this wrapper: for every operation produced,
+// the expanded quantities must sum to the quantity of the cart line being expanded.
+function cartTransformRun(input) {
+  const result = cartTransformRunRaw(input);
+  for (const op of result.operations) {
+    const src = input.cart.lines.find((l) => l.id === op.lineExpand.cartLineId);
+    const total = op.lineExpand.expandedCartItems.reduce((sum, i) => sum + i.quantity, 0);
+    expect(total).toBe(src.quantity);
+  }
+  return result;
+}
 
 const ALL_TAGS = [
   "twin", "twins", "twin-fam", "amba-twin",
@@ -76,24 +88,18 @@ describe("expansion", () => {
     expect(items(r)).toEqual([full(1), atCost(1)]);
   });
 
-  // WHAT THE CODE ACTUALLY DOES (for Tom to check against the brief):
-  // twin allowance is 2 additional units. Quantity 4 has 3 additional units.
-  // discountable = min(3, 2) = 2.  fullPriceQty = lineQty - discountable = 4 - 2 = 2.
-  // beyondAllowance = 3 - 2 = 1, appended as another full-price item.
-  // Result: [2 full, 2 at cost, 1 full] = 5 units on a line of 4.
-  // The brief expected [1 full, 2 at cost, 1 full] = 4 units. This test pins the
-  // ported behaviour as it stands in main at 405b190; it is flagged in the report.
-  it("5. twin tag, one line quantity 4: ACTUAL ported output is [2 full, 2 at cost, 1 full]", () => {
+  // What the code does: twin allowance is 2 additional units. Quantity 4 has 3 additional.
+  // First unit full price (1), 2 at cost, the 1 beyond the allowance back at full price.
+  // Expanded quantities sum to 4 (also enforced for every scenario by the wrapper above).
+  it("5. twin tag, one line quantity 4: [1 full, 2 at cost, 1 full]", () => {
     const r = cartTransformRun(cart({ lines: [line({ quantity: 4 })] }));
-    expect(items(r)).toEqual([full(2), atCost(2), full(1)]);
+    expect(items(r)).toEqual([full(1), atCost(2), full(1)]);
   });
 
-  // Known defect, pinned. it.fails passes while the sum differs from the line quantity
-  // and will start failing (prompting removal of .fails) once the over-count is fixed.
-  it.fails("5b. KNOWN DEFECT: expanded quantities should sum to the line quantity (4)", () => {
-    const r = cartTransformRun(cart({ lines: [line({ quantity: 4 })] }));
-    const total = items(r).reduce((s, i) => s + i.quantity, 0);
-    expect(total).toBe(4);
+  it("5b. beyond-allowance quantities conserve units (twin 5, triplet 5, quad-group 9)", () => {
+    expect(items(cartTransformRun(cart({ lines: [line({ quantity: 5 })] })))).toEqual([full(1), atCost(2), full(2)]);
+    expect(items(cartTransformRun(cart({ tags: ["triplet"], lines: [line({ quantity: 5 })] })))).toEqual([full(1), atCost(3), full(1)]);
+    expect(items(cartTransformRun(cart({ tags: ["amba-quad"], lines: [line({ quantity: 9 })] })))).toEqual([full(1), atCost(6), full(2)]);
   });
 
   it("6a. triplet tag, one line quantity 4: [1 full, 3 at cost]", () => {
