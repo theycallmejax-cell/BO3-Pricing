@@ -2,13 +2,35 @@
   "name": "bo3-multiples-pricing",
   "version": "1.0.0",
   "description": "Shopify Cart Transform Function for multiples families.",
+  "license": "UNLICENSED",
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "shopify app function build",
-    "preview": "shopify app function run"
+    "shopify": "npm exec -- shopify",
+    "typegen": "npm exec -- shopify app function typegen",
+    "build": "npm exec -- shopify app function build",
+    "preview": "npm exec -- shopify app function run",
+    "test": "vitest run"
+  },
+  "codegen": {
+    "schema": "schema.graphql",
+    "documents": "src/*.graphql",
+    "generates": {
+      "./generated/api.ts": {
+        "plugins": [
+          "typescript",
+          "typescript-operations"
+        ]
+      }
+    },
+    "config": {
+      "omitOperationSuffix": true
+    }
+  },
+  "dependencies": {
+    "@shopify/shopify_function": "^2.0.1"
   },
   "devDependencies": {
-    "@shopify/shopify_function": "^0.2.0"
+    "vitest": "^3.2.4"
   }
 }
