@@ -1,0 +1,30 @@
+name: Activate cart transform (manual only)
+
+# Manual only. Never runs on push or pull request.
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type ACTIVATE to confirm"
+        type: string
+        required: true
+
+jobs:
+  activate:
+    if: ${{ inputs.confirm == 'ACTIVATE' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Activate cart transform
+        env:
+          CONFIRM: ${{ inputs.confirm }}
+          SHOPIFY_API_KEY: ${{ secrets.SHOPIFY_API_KEY }}
+          SHOPIFY_API_SECRET: ${{ secrets.SHOPIFY_API_SECRET }}
+        run: node scripts/activate-cart-transform.mjs
