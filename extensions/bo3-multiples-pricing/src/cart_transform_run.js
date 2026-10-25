@@ -20,8 +20,8 @@ const DISCOUNT_TITLE = "Multiples Pricing";
 export const ELIGIBLE_COLLECTION_IDS = ["gid://shopify/Collection/330356261047"];
 
 const TIERS = [
-  { tags: new Set(["twin", "twins", "twin-fam", "amba-twin"]), maxAdditional: 2 },
-  { tags: new Set(["triplet", "triplets", "triplet-fam", "amba-triplet"]), maxAdditional: 3 },
+  { tags: new Set(["twin", "twins", "twin-fam", "amba-twin"]), maxAdditional: 1 },
+  { tags: new Set(["triplet", "triplets", "triplet-fam", "amba-triplet"]), maxAdditional: 2 },
   { tags: new Set(["amba-quad", "hero", "quad", "quads", "amba", "amba-member"]), maxAdditional: 6 },
 ];
 

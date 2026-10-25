@@ -95,23 +95,23 @@ describe("expansion", () => {
     expect(items(r)).toEqual([full(1), atCost(1)]);
   });
 
-  // What the code does: twin allowance is 2 additional units. Quantity 4 has 3 additional.
-  // First unit full price (1), 2 at cost, the 1 beyond the allowance back at full price.
+  // Round 3 (Cheyne: "twins 1 triplets 2"): twin allowance is 1 additional unit. Quantity 4 has 3 additional.
+  // First unit full price (1), 1 at cost, the 2 beyond the allowance at full price.
   // Expanded quantities sum to 4 (also enforced for every scenario by the wrapper above).
-  it("5. twin tag, one line quantity 4: [1 full, 2 at cost, 1 full]", () => {
+  it("5. twin tag, one line quantity 4: [1 full, 1 at cost, 2 full]", () => {
     const r = cartTransformRun(cart({ lines: [line({ quantity: 4 })] }));
-    expect(items(r)).toEqual([full(1), atCost(2), full(1)]);
+    expect(items(r)).toEqual([full(1), atCost(1), full(2)]);
   });
 
-  it("5b. beyond-allowance quantities conserve units (twin 5, triplet 5, quad-group 9)", () => {
-    expect(items(cartTransformRun(cart({ lines: [line({ quantity: 5 })] })))).toEqual([full(1), atCost(2), full(2)]);
-    expect(items(cartTransformRun(cart({ tags: ["triplet"], lines: [line({ quantity: 5 })] })))).toEqual([full(1), atCost(3), full(1)]);
+  it("5b. beyond-allowance quantities conserve units (twin 5, triplet 5, quad-group 9; allowances 1 / 2 / 6)", () => {
+    expect(items(cartTransformRun(cart({ lines: [line({ quantity: 5 })] })))).toEqual([full(1), atCost(1), full(3)]);
+    expect(items(cartTransformRun(cart({ tags: ["triplet"], lines: [line({ quantity: 5 })] })))).toEqual([full(1), atCost(2), full(2)]);
     expect(items(cartTransformRun(cart({ tags: ["amba-quad"], lines: [line({ quantity: 9 })] })))).toEqual([full(1), atCost(6), full(2)]);
   });
 
-  it("6a. triplet tag, one line quantity 4: [1 full, 3 at cost]", () => {
+  it("6a. triplet tag, one line quantity 4: [1 full, 2 at cost, 1 full]", () => {
     const r = cartTransformRun(cart({ tags: ["triplet"], lines: [line({ quantity: 4 })] }));
-    expect(items(r)).toEqual([full(1), atCost(3)]);
+    expect(items(r)).toEqual([full(1), atCost(2), full(1)]);
   });
 
   it("6b. quad-group tag (amba-quad), one line quantity 7: [1 full, 6 at cost]", () => {
@@ -127,24 +127,23 @@ describe("expansion", () => {
 });
 
 describe("allowance shared per product", () => {
-  // Round 2: one pool across all eligible lines. Line 1 = full, cost; line 2 continues the pool (1 cost left of 2), then full.
-  it("7a. same product on two lines: pooled allowance (twin, 2 + 2): line 1 [full, cost], line 2 [cost, full]", () => {
+  // Round 3: twin allowance is 1, so line 1 [full, cost] uses it all and line 2 (same pool) gets no operation.
+  it("7a. same product on two lines: pooled allowance (twin, 2 + 2): line 1 [full, cost], line 2 untouched", () => {
     const l1 = line({ id: "gid://shopify/CartLine/1", quantity: 2, variant: 1 });
-    const l2 = line({ id: "gid://shopify/CartLine/2", quantity: 2, variant: 2 });
-    const r = cartTransformRun(cart({ lines: [l1, l2] }));
-    expect(r.operations).toHaveLength(2);
-    const v2 = "gid://shopify/ProductVariant/2";
-    expect(items(r, 0)).toEqual([full(1), atCost(1)]);
-    expect(items(r, 1)).toEqual([atCost(1, "8.00", v2), full(1, v2)]);
-  });
-
-  it("7b. allowance exhausted by the first line: second line of the same product is skipped", () => {
-    const l1 = line({ id: "gid://shopify/CartLine/1", quantity: 3, variant: 1 }); // uses 2 of 2
     const l2 = line({ id: "gid://shopify/CartLine/2", quantity: 2, variant: 2 });
     const r = cartTransformRun(cart({ lines: [l1, l2] }));
     expect(r.operations).toHaveLength(1);
     expect(r.operations[0].lineExpand.cartLineId).toBe("gid://shopify/CartLine/1");
-    expect(items(r)).toEqual([full(1), atCost(2)]);
+    expect(items(r, 0)).toEqual([full(1), atCost(1)]);
+  });
+
+  it("7b. allowance exhausted by the first line: second line of the same product is skipped", () => {
+    const l1 = line({ id: "gid://shopify/CartLine/1", quantity: 3, variant: 1 }); // uses 1 of 1 (twin)
+    const l2 = line({ id: "gid://shopify/CartLine/2", quantity: 2, variant: 2 });
+    const r = cartTransformRun(cart({ lines: [l1, l2] }));
+    expect(r.operations).toHaveLength(1);
+    expect(r.operations[0].lineExpand.cartLineId).toBe("gid://shopify/CartLine/1");
+    expect(items(r)).toEqual([full(1), atCost(1), full(1)]); // round 3: twin allowance 1
   });
 
   // Round 2: allowance is pooled per collection, not per product, so line 2 (different product) gets nothing once line 1 used it.
@@ -153,7 +152,7 @@ describe("allowance shared per product", () => {
     const l2 = line({ id: "gid://shopify/CartLine/2", quantity: 3, product: 200, variant: 2 });
     const r = cartTransformRun(cart({ lines: [l1, l2] }));
     expect(r.operations).toHaveLength(1);
-    expect(items(r)).toEqual([full(1), atCost(2)]);
+    expect(items(r)).toEqual([full(1), atCost(1), full(1)]); // round 3: twin allowance 1
   });
 })
 
@@ -222,9 +221,9 @@ describe("tier resolution and output shape", () => {
     expect(items(r)).toEqual([full(1), atCost(6)]);
   });
 
-  it("10b. customer holds twin and triplet: allowance 3 wins", () => {
+  it("10b. customer holds twin and triplet: the larger allowance (2) wins", () => {
     const r = cartTransformRun(cart({ tags: ["twin", "triplet"], lines: [line({ quantity: 4 })] }));
-    expect(items(r)).toEqual([full(1), atCost(3)]);
+    expect(items(r)).toEqual([full(1), atCost(2), full(1)]);
   });
 
   it("11. output has only the key lineExpand per operation and no currencyCode anywhere", () => {
@@ -272,15 +271,15 @@ describe("round 2: collection pooling", () => {
     expect(items(r)).toEqual([atCost(1, "9.50", V(2))]);
   });
 
-  it("three lines across two products (twin): [full] / [cost] / [cost, full]", () => {
+  // Round 3: twin allowance 1, so only line 2 is at cost and line 3 (pool exhausted) gets no operation.
+  it("three lines across two products (twin): [full] / [cost] / untouched", () => {
     const r = cartTransformRun(cart({ lines: [
       line({ id: L(1), quantity: 1, product: 100, variant: 1 }),
       line({ id: L(2), quantity: 1, product: 200, variant: 2 }),
       line({ id: L(3), quantity: 2, product: 100, variant: 3 }),
     ] }));
-    expect(ops(r)).toEqual([L(2), L(3)]);
+    expect(ops(r)).toEqual([L(2)]);
     expect(items(r, 0)).toEqual([atCost(1, "8.00", V(2))]);
-    expect(items(r, 1)).toEqual([atCost(1, "8.00", V(3)), full(1, V(3))]);
   });
 
   // Brief said "total 72.00"; the rule gives 20.00 + 5 x 8.00 = 60.00 at retail 20.00 / cost 8.00. Asserting the rule.
@@ -298,13 +297,13 @@ describe("round 2: collection pooling", () => {
     expect(total.toFixed(2)).toBe("60.00");
   });
 
-  it("allowance exhausted mid-line (twin): 1 + 4 gives line 2 [2 cost, 2 full]", () => {
+  it("allowance exhausted mid-line (twin, allowance 1): 1 + 4 gives line 2 [1 cost, 3 full]", () => {
     const r = cartTransformRun(cart({ lines: [
       line({ id: L(1), quantity: 1, product: 100, variant: 1 }),
       line({ id: L(2), quantity: 4, product: 200, variant: 2 }),
     ] }));
     expect(ops(r)).toEqual([L(2)]);
-    expect(items(r)).toEqual([atCost(2, "8.00", V(2)), full(2, V(2))]);
+    expect(items(r)).toEqual([atCost(1, "8.00", V(2)), full(3, V(2))]);
   });
 
   it("non-member product (Grown-Ups-like) or uncollected product is untouched and takes no pool units", () => {
@@ -317,8 +316,8 @@ describe("round 2: collection pooling", () => {
     const b = line({ id: L(5), quantity: 2, product: 200, variant: 2 });
     const r = cartTransformRun(cart({ lines: [grownUps, uncollected, noField, a, b] }));
     expect(ops(r)).toEqual([L(5)]);
-    // a is the pool's first unit (the non-members did not take it); b: both units at cost (twin allowance 2).
-    expect(items(r)).toEqual([atCost(2, "8.00", V(2))]);
+    // a is the pool's first unit (the non-members did not take it); b: first unit at cost (twin allowance 1), second full.
+    expect(items(r)).toEqual([atCost(1, "8.00", V(2)), full(1, V(2))]);
   });
 
   it("a line failing a guard in the middle does not consume allowance", () => {
@@ -330,7 +329,7 @@ describe("round 2: collection pooling", () => {
       line({ id: L(5), quantity: 3, product: 500, variant: 5 }),
     ] }));
     expect(ops(r)).toEqual([L(5)]);
-    expect(items(r)).toEqual([atCost(2, "8.00", V(5)), full(1, V(5))]);
+    expect(items(r)).toEqual([atCost(1, "8.00", V(5)), full(2, V(5))]);
   });
 
   it("a guard-failing line is not the pool's first unit", () => {
@@ -364,9 +363,9 @@ describe("round 2: collection pooling", () => {
       const both = line({ id: L(1), quantity: 2, product: 100, variant: 1, member: [OTHER, CLUB] });
       const onlyClub = line({ id: L(2), quantity: 2, product: 200, variant: 2, member: [CLUB] });
       const r = cartTransformRun(cart({ lines: [both, onlyClub] }));
-      // both -> CLUB pool (first in list); so onlyClub continues that pool: both [full, cost], onlyClub [cost, full].
+      // both -> CLUB pool (first in list); so onlyClub continues that pool: both [full, cost] uses the twin allowance of 1, onlyClub gets nothing.
+      expect(r.operations).toHaveLength(1);
       expect(items(r, 0)).toEqual([full(1), atCost(1)]);
-      expect(items(r, 1)).toEqual([atCost(1, "8.00", V(2)), full(1, V(2))]);
     } finally {
       ELIGIBLE_COLLECTION_IDS.pop();
     }
@@ -390,5 +389,35 @@ describe("round 2: collection pooling", () => {
     const queryIds = [...m[1].matchAll(/"([^"]+)"/g)].map((x) => x[1]);
     expect(queryIds).toEqual(ELIGIBLE_COLLECTION_IDS);
     expect(ELIGIBLE_COLLECTION_IDS).toEqual([CLUB]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Round 3 (Cheyne: "twins 1 triplets 2"): allowances are twin 1, triplet 2, quad-and-above 6.
+// ---------------------------------------------------------------------------
+describe("round 3: allowances 1 / 2 / 6", () => {
+  it("twin family, quantity 3 of one collection: [1 full, 1 cost, 1 full]", () => {
+    const r = cartTransformRun(cart({ tags: ["twin"], lines: [line({ quantity: 3 })] }));
+    expect(items(r)).toEqual([full(1), atCost(1), full(1)]);
+  });
+
+  it("triplet family, quantity 4: [1 full, 2 cost, 1 full]", () => {
+    const r = cartTransformRun(cart({ tags: ["triplet"], lines: [line({ quantity: 4 })] }));
+    expect(items(r)).toEqual([full(1), atCost(2), full(1)]);
+  });
+
+  it("highest tier wins when a customer holds twin plus triplet: allowance 2 (not 1, not 3)", () => {
+    const r = cartTransformRun(cart({ tags: ["twin", "triplet"], lines: [line({ quantity: 5 })] }));
+    expect(items(r)).toEqual([full(1), atCost(2), full(2)]);
+  });
+
+  it("every tag in each group resolves to its allowance (1 / 2 / 6) on a quantity-9 line", () => {
+    const expectAt = { twin: 1, twins: 1, "twin-fam": 1, "amba-twin": 1, triplet: 2, triplets: 2, "triplet-fam": 2, "amba-triplet": 2,
+      "amba-quad": 6, hero: 6, quad: 6, quads: 6, amba: 6, "amba-member": 6 };
+    for (const [tag, allow] of Object.entries(expectAt)) {
+      const r = cartTransformRun(cart({ tags: [tag], lines: [line({ quantity: 9 })] }));
+      const cost = items(r).filter((i) => i.price).reduce((n, i) => n + i.quantity, 0);
+      expect(cost, tag).toBe(allow);
+    }
   });
 });
