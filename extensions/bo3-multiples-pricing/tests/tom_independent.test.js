@@ -13,7 +13,8 @@ function mkLine(id, qty, { product = 1, variant = product, retail = "20.00", met
   return {
     id: `gid://shopify/CartLine/${id}`, quantity: qty,
     merchandise: { __typename: "ProductVariant", id: `gid://shopify/ProductVariant/${variant}`,
-      product: { id: `gid://shopify/Product/${product}`, metafield } },
+      // Round 2 (Lex): lines must be members of The Club Pricing to be eligible; added so these cases keep exercising the rule.
+      product: { id: `gid://shopify/Product/${product}`, inCollections: [{ collectionId: "gid://shopify/Collection/330356261047", isMember: true }], metafield } },
     cost: { amountPerQuantity: { amount: retail, currencyCode: "AUD" } },
   };
 }
@@ -95,25 +96,25 @@ describe("single product, quantities 1..12, each tier", () => {
 });
 
 describe("multi-line", () => {
-  it("two different products each get their own allowance", () => {
+  // Round 2 (Lex): allowance is now pooled per collection, so products no longer get separate allowances. Pool: 1 full, 2 at cost, then full (line 1 = 56), line 2 all full (120).
+  it("two different products in the same collection share one allowance (pooled)", () => {
     const lines = [mkLine(1, 4, { product: 1 }), mkLine(2, 4, { product: 2, retail: "30.00", metafield: meta("10.00") })];
     const input = mkInput(lines, { held: ["twin"] });
     const out = cartTransformRun(input); conserved(input, out); checkShape(out);
-    expect(impliedTotal(input, out)).toBe(4 * 20 - 2 * 12 + 4 * 30 - 2 * 20);
+    expect(impliedTotal(input, out)).toBe(4 * 20 - 2 * 12 + 4 * 30);
   });
   it("two lines of the same product, qty 2 + 2, twin: rule total", () => {
     const input = mkInput([mkLine(1, 2), mkLine(2, 2)], { held: ["twin"] });
     const out = cartTransformRun(input); conserved(input, out);
     expect(impliedTotal(input, out)).toBe(ruleTotal(input.cart.lines, 2));
   });
-  // The following two diverge from the RULE read per design (first unit of each LATER line is charged full, qty-1 lines are skipped).
-  // Inherited from pre-port run.js. Marked it.fails so the suite documents them without hiding them.
-  it.fails("DEFECT? same product, two lines 3 + 3, quad: rule says 5 at cost", () => {
+  // Round 2 (Lex): these two were it.fails (DEFECT?). Pooling by collection now produces the per-collection totals, so they are ordinary assertions.
+  it("same product, two lines 3 + 3, quad: 5 at cost", () => {
     const input = mkInput([mkLine(1, 3), mkLine(2, 3)], { held: ["quad"] });
     const out = cartTransformRun(input);
     expect(impliedTotal(input, out)).toBe(ruleTotal(input.cart.lines, 6));
   });
-  it.fails("DEFECT? same product, two lines 1 + 1, twin: rule says second unit at cost", () => {
+  it("same product, two lines 1 + 1, twin: second unit at cost", () => {
     const input = mkInput([mkLine(1, 1), mkLine(2, 1, { variant: 11 })], { held: ["twin"] });
     const out = cartTransformRun(input);
     expect(impliedTotal(input, out)).toBe(ruleTotal(input.cart.lines, 2));
@@ -245,9 +246,10 @@ describe("random carts (seed 20261025, 400 carts)", () => {
       expect(impliedTotal(input, out)).toBeLessThanOrEqual(lines.reduce((s, l) => s + l.quantity * parseFloat(l.cost.amountPerQuantity.amount), 0) + 0.005);
       // Informational: how often does per-line behaviour differ from the per-design rule
       const tierAllow = Math.max(0, ...held.map((h) => ALLOW[h] ?? ALLOW[h === "hero" || h === "amba-member" ? "quad" : h.startsWith("triplet") ? "triplet" : "twin"]));
-      if (input.cart.buyerIdentity.customer && Number.isFinite(eff) && eff > 0) { const d = impliedTotal(input, out) - ruleTotal(lines, tierAllow, eff); expect(d).toBeGreaterThanOrEqual(-0.011); if (Math.abs(d) > 0.011) ruleMismatch++; }
+      // Round 2 (Lex): ruleTotal is a per-product oracle; pooling across products legitimately differs from it in either direction, so the hard bound (d >= -0.011) is dropped and the difference stays informational.
+      if (input.cart.buyerIdentity.customer && Number.isFinite(eff) && eff > 0) { const d = impliedTotal(input, out) - ruleTotal(lines, tierAllow, eff); if (Math.abs(d) > 0.011) ruleMismatch++; }
     }
     expect(withOps).toBeGreaterThan(50);
-    console.log(`random carts: 400, with operations: ${withOps}, differing from per-design rule: ${ruleMismatch}`);
+    console.log(`random carts: 400, with operations: ${withOps}, differing from per-product oracle (expected under pooling): ${ruleMismatch}`);
   });
 });
