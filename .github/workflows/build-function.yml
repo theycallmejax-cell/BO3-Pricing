@@ -1,6 +1,11 @@
 name: Build and Deploy bo3-multiples-pricing
 
 on:
+  # A push to deploy-ready builds and creates an UNRELEASED app version only.
+  # It can never release to the store; releasing is a manual run with no_release unticked.
+  push:
+    branches:
+      - deploy-ready
   workflow_dispatch:
     inputs:
       no_release:
@@ -54,7 +59,7 @@ jobs:
           SHOPIFY_CLI_TTY: "0"
           NO_COLOR: "1"
           CI: "true"
-          NO_RELEASE: ${{ inputs.no_release }}
+          NO_RELEASE: ${{ github.event_name == 'push' || inputs.no_release }}
         run: |
           # --no-release and --allow-updates are mutually exclusive in the CLI usage line.
           if [ "$NO_RELEASE" = "true" ]; then
