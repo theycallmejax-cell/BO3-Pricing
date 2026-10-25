@@ -2,6 +2,12 @@ name: Build and Deploy bo3-multiples-pricing
 
 on:
   workflow_dispatch:
+    inputs:
+      no_release:
+        description: "Create the app version but do not release it (passes --no-release)"
+        type: boolean
+        required: false
+        default: false
 
 jobs:
   build:
@@ -21,6 +27,9 @@ jobs:
       - name: Install extension dependencies
         run: cd extensions/bo3-multiples-pricing && npm install
 
+      - name: Test function
+        run: cd extensions/bo3-multiples-pricing && npm test
+
       - name: Install Shopify CLI
         run: npm install -g @shopify/cli@4
 
@@ -31,4 +40,10 @@ jobs:
           SHOPIFY_CLI_TTY: "0"
           NO_COLOR: "1"
           CI: "true"
-        run: shopify app deploy --allow-updates --no-color
+          NO_RELEASE: ${{ inputs.no_release }}
+        run: |
+          if [ "$NO_RELEASE" = "true" ]; then
+            shopify app deploy --allow-updates --no-color --no-release
+          else
+            shopify app deploy --allow-updates --no-color
+          fi
