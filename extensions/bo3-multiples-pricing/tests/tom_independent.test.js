@@ -4,7 +4,8 @@ import { describe, it, expect } from "vitest";
 import { cartTransformRun } from "../src/cart_transform_run.js";
 
 const TAGS = ["twin","twins","twin-fam","amba-twin","triplet","triplets","triplet-fam","amba-triplet","amba-quad","hero","quad","quads","amba","amba-member"];
-const ALLOW = { twin: 2, triplet: 3, quad: 6 };
+// Round 3 (Cheyne 2026-10-25): twin 1, triplet 2, quad-and-above 6. Single tier table; every expected value below derives from it.
+const ALLOW = { twin: 1, triplet: 2, quad: 6 };
 const REP = { twin: "twin", triplet: "triplet", quad: "quad" };
 
 const hasTags = (held, mapCase = (s) => s) => TAGS.map((t) => ({ tag: mapCase(t), hasTag: held.includes(t) }));
@@ -96,17 +97,17 @@ describe("single product, quantities 1..12, each tier", () => {
 });
 
 describe("multi-line", () => {
-  // Round 2 (Lex): allowance is now pooled per collection, so products no longer get separate allowances. Pool: 1 full, 2 at cost, then full (line 1 = 56), line 2 all full (120).
+  // Round 2 (Lex): allowance is now pooled per collection, so products no longer get separate allowances. Round 3: twin allowance is 1, so pool: 1 full, 1 at cost, then full (line 1 = 68), line 2 all full (120).
   it("two different products in the same collection share one allowance (pooled)", () => {
     const lines = [mkLine(1, 4, { product: 1 }), mkLine(2, 4, { product: 2, retail: "30.00", metafield: meta("10.00") })];
     const input = mkInput(lines, { held: ["twin"] });
     const out = cartTransformRun(input); conserved(input, out); checkShape(out);
-    expect(impliedTotal(input, out)).toBe(4 * 20 - 2 * 12 + 4 * 30);
+    expect(impliedTotal(input, out)).toBe(4 * 20 - ALLOW.twin * 12 + 4 * 30);
   });
   it("two lines of the same product, qty 2 + 2, twin: rule total", () => {
     const input = mkInput([mkLine(1, 2), mkLine(2, 2)], { held: ["twin"] });
     const out = cartTransformRun(input); conserved(input, out);
-    expect(impliedTotal(input, out)).toBe(ruleTotal(input.cart.lines, 2));
+    expect(impliedTotal(input, out)).toBe(ruleTotal(input.cart.lines, ALLOW.twin));
   });
   // Round 2 (Lex): these two were it.fails (DEFECT?). Pooling by collection now produces the per-collection totals, so they are ordinary assertions.
   it("same product, two lines 3 + 3, quad: 5 at cost", () => {
@@ -117,12 +118,12 @@ describe("multi-line", () => {
   it("same product, two lines 1 + 1, twin: second unit at cost", () => {
     const input = mkInput([mkLine(1, 1), mkLine(2, 1, { variant: 11 })], { held: ["twin"] });
     const out = cartTransformRun(input);
-    expect(impliedTotal(input, out)).toBe(ruleTotal(input.cart.lines, 2));
+    expect(impliedTotal(input, out)).toBe(ruleTotal(input.cart.lines, ALLOW.twin));
   });
-  it("same product, two lines 1 + 3, twin: matches rule (2 at cost)", () => {
+  it("same product, two lines 1 + 3, twin: matches rule (1 at cost, allowance 1)", () => {
     const input = mkInput([mkLine(1, 1), mkLine(2, 3, { variant: 11 })], { held: ["twin"] });
     const out = cartTransformRun(input);
-    expect(impliedTotal(input, out)).toBe(ruleTotal(input.cart.lines, 2));
+    expect(impliedTotal(input, out)).toBe(ruleTotal(input.cart.lines, ALLOW.twin));
   });
 });
 
@@ -156,17 +157,17 @@ describe("customer and tags", () => {
   it("hasTags null", () => { const i = mkInput(lines(), { tagList: null }); expect(cartTransformRun(i).operations).toEqual([]); });
   it("two tags from different tiers: higher wins", () => {
     const i = mkInput([mkLine(1, 12)], { held: ["twin", "triplet"] });
-    const o = cartTransformRun(i); conserved(i, o); expect(impliedTotal(i, o)).toBe(12 * 20 - 3 * 12);
+    const o = cartTransformRun(i); conserved(i, o); expect(impliedTotal(i, o)).toBe(12 * 20 - ALLOW.triplet * 12);
     const j = mkInput([mkLine(1, 12)], { held: ["twins", "hero", "triplets"] });
     expect(impliedTotal(j, cartTransformRun(j))).toBe(12 * 20 - 6 * 12);
   });
   it("every one of the 14 tags resolves to its tier", () => {
-    const tier = (t) => (["twin","twins","twin-fam","amba-twin"].includes(t) ? 2 : ["triplet","triplets","triplet-fam","amba-triplet"].includes(t) ? 3 : 6);
+    const tier = (t) => (["twin","twins","twin-fam","amba-twin"].includes(t) ? ALLOW.twin : ["triplet","triplets","triplet-fam","amba-triplet"].includes(t) ? ALLOW.triplet : ALLOW.quad);
     for (const t of TAGS) { const i = mkInput([mkLine(1, 12)], { held: [t] }); expect(impliedTotal(i, cartTransformRun(i))).toBe(240 - tier(t) * 12); }
   });
   it("mixed-case tag strings in results are matched (lowercased in code)", () => {
     const i = mkInput([mkLine(1, 4)], { tagList: [{ tag: "TWIN", hasTag: true }, { tag: " Triplet ", hasTag: false }] });
-    expect(impliedTotal(i, cartTransformRun(i))).toBe(80 - 2 * 12);
+    expect(impliedTotal(i, cartTransformRun(i))).toBe(80 - ALLOW.twin * 12);
   });
   it("mixed-case tag with hasTag false never grants", () => {
     const i = mkInput([mkLine(1, 4)], { tagList: [{ tag: "Quad", hasTag: false }] });
@@ -184,11 +185,11 @@ describe("customer and tags", () => {
 
 describe("presentmentCurrencyRate", () => {
   const run = (rate) => { const i = mkInput([mkLine(1, 4)], { held: ["twin"], rate }); const o = cartTransformRun(i); conserved(i, o); checkShape(o); return [i, o]; };
-  it("absent treated as 1", () => { const [i, o] = run("ABSENT"); expect(impliedTotal(i, o)).toBe(80 - 2 * 12); });
-  it("null treated as 1", () => { const [i, o] = run(null); expect(impliedTotal(i, o)).toBe(80 - 2 * 12); });
-  it("1", () => { const [i, o] = run(1); expect(impliedTotal(i, o)).toBe(56); });
-  it("0.65: cost 8.00 becomes 5.20", () => { const [i, o] = run(0.65); expect(o.operations[0].lineExpand.expandedCartItems[1].price.adjustment.fixedPricePerUnit.amount).toBe("5.20"); expect(impliedTotal(i, o)).toBe(80 - 2 * (20 - 5.2)); });
-  it('"0.65" string', () => { const [i, o] = run("0.65"); expect(impliedTotal(i, o)).toBe(80 - 2 * (20 - 5.2)); });
+  it("absent treated as 1", () => { const [i, o] = run("ABSENT"); expect(impliedTotal(i, o)).toBe(80 - ALLOW.twin * 12); });
+  it("null treated as 1", () => { const [i, o] = run(null); expect(impliedTotal(i, o)).toBe(80 - ALLOW.twin * 12); });
+  it("1", () => { const [i, o] = run(1); expect(impliedTotal(i, o)).toBe(80 - ALLOW.twin * 12); });
+  it("0.65: cost 8.00 becomes 5.20", () => { const [i, o] = run(0.65); expect(o.operations[0].lineExpand.expandedCartItems[1].price.adjustment.fixedPricePerUnit.amount).toBe("5.20"); expect(impliedTotal(i, o)).toBe(80 - ALLOW.twin * (20 - 5.2)); });
+  it('"0.65" string', () => { const [i, o] = run("0.65"); expect(impliedTotal(i, o)).toBe(80 - ALLOW.twin * (20 - 5.2)); });
   it("0: no discount, full retail", () => { const [i, o] = run(0); expect(o.operations).toEqual([]); expect(impliedTotal(i, o)).toBe(80); });
   it('"abc": no discount, full retail', () => { const [i, o] = run("abc"); expect(o.operations).toEqual([]); expect(impliedTotal(i, o)).toBe(80); });
   it("negative and NaN: no discount", () => { for (const r of [-1, NaN, Infinity]) { const [i, o] = run(r); expect(impliedTotal(i, o)).toBe(80); } });

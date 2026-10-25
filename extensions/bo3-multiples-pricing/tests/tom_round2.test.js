@@ -26,8 +26,9 @@ const COLOUR = "gid://shopify/Collection/329910452407"; // Colour Theory, never 
 // ---- independent tier table (oracle's own) ----
 const TAG_QUERY = ["twin", "twins", "twin-fam", "amba-twin", "triplet", "triplets", "triplet-fam", "amba-triplet", "amba-quad", "hero", "quad", "quads", "amba", "amba-member"];
 const TIER_OF = {
-  twin: 2, twins: 2, "twin-fam": 2, "amba-twin": 2,
-  triplet: 3, triplets: 3, "triplet-fam": 3, "amba-triplet": 3,
+  // Round 3 (Cheyne 2026-10-25): twin 1, triplet 2, quad-and-above 6. This table is the only place the oracle holds allowances.
+  twin: 1, twins: 1, "twin-fam": 1, "amba-twin": 1,
+  triplet: 2, triplets: 2, "triplet-fam": 2, "amba-triplet": 2,
   "amba-quad": 6, hero: 6, quad: 6, quads: 6, amba: 6, "amba-member": 6,
 };
 const TIER_NAMES = { twin: ["twin"], triplet: ["triplet"], quad: ["quad"] };
@@ -231,10 +232,11 @@ describe("hand checks (worked by hand, not by the oracle)", () => {
     const i = cart([mk(1, { product: 1, variant: 11 }), mk(1, { product: 1, variant: 12 })], { held: ["twin"] });
     expect(run("hand-twin-1+1", i).total).toBe(28);
   });
-  it("triplet, two colours (cost 8 and 9.50), 2+2: 1 full, 3 at cost = 20+8+8+9.5... computed by hand", () => {
-    // line1 (A, qty2): unit0 full 20, unit1 at cost 8. line2 (B retail 25 cost 9.50, qty2): unit2 at cost 9.50, unit3 at cost 9.50 (3rd allowance).
+  it("triplet, two colours (cost 8 and 9.50), 2+2: 1 full, 2 at cost, 1 full = 20+8+9.5+25, by hand", () => {
+    // Round 3 (triplet allowance 2). line1 (A, qty2): unit0 full 20, unit1 at cost 8 (allowance 1 of 2).
+    // line2 (B retail 25 cost 9.50, qty2): unit2 at cost 9.50 (allowance 2 of 2), unit3 full 25.
     const i = cart([mk(2, { product: 1 }), mk(2, { product: 2, retail: 25, cost: 9.5 })], { held: ["triplet"] });
-    expect(run("hand-triplet-2colours", i).total).toBe(20 + 8 + 9.5 + 9.5);
+    expect(run("hand-triplet-2colours", i).total).toBe(20 + 8 + 9.5 + 25);
   });
   it("single unit, single line: untouched", () => {
     const i = cart([mk(1)], { held: ["quad"] });
@@ -244,7 +246,7 @@ describe("hand checks (worked by hand, not by the oracle)", () => {
   });
   it("rate 0.65 converts cost: twin 3 units retail 20 cost 8 -> 20 + 2 x 5.20", () => {
     const i = cart([mk(3)], { held: ["twin"], rate: 0.65 });
-    expect(run("hand-rate", i).total).toBe(30.4);
+    expect(run("hand-rate", i).total).toBe(45.2); // round 3, twin allowance 1: 20 full + 5.20 at cost + 20 full
   });
 });
 
@@ -296,10 +298,10 @@ describe("two colours (two products) mixed with sizes", () => {
     });
   }
   it("two products with different cost: each at-cost unit uses its own line's cost", () => {
-    // twin: A x1 (full), B x2 -> both at cost at 9.50 (B's cost), not A's 8
+    // Round 3 twin allowance 1: A x1 (full 20), B x2 -> first B at cost 9.50 (B's cost, not A's 8), second B full 25
     const i = cart([mk(1, { product: 1 }), mk(2, { product: 2, retail: 25, cost: 9.5 })], { held: ["twin"] });
     const r = run("own-cost", i);
-    expect(r.total).toBe(20 + 9.5 + 9.5);
+    expect(r.total).toBe(20 + 9.5 + 25);
   });
 });
 
@@ -376,11 +378,11 @@ describe("guard-failing line in the middle", () => {
     const r = run("guard-first", input);
     expect(r.act[1].units.map((u) => u.atCost)).toEqual([false, true]); // first real unit still full
   });
-  it("guard-failing line consumes no allowance: twin allowance still 2 after it", () => {
+  it("guard-failing line consumes no allowance: twin allowance still 1 after it", () => {
     const bad = mk(5, { product: 70, cost: 20 });
     const input = cart([mk(1, { product: 1 }), bad, mk(5, { product: 2, retail: 25, cost: 9.5 })], { held: ["twin"] });
     const r = run("guard-allowance", input);
-    expect(r.act[2].units.map((u) => u.atCost)).toEqual([true, true, false, false, false]);
+    expect(r.act[2].units.map((u) => u.atCost)).toEqual([true, false, false, false, false]); // round 3: allowance 1
   });
   it("cost passes at rate 1 but fails at rate 1.5 for one product only", () => {
     const input = cart([mk(2, { product: 1, cost: 8 }), mk(2, { product: 2, retail: 25, cost: 18 })], { held: ["quad"], rate: 1.5 });
@@ -406,9 +408,9 @@ describe("two eligible collections: independent pools", () => {
       mk(3, { product: 2, retail: 25, cost: 9.5, members: [OTHER], universe: U }),
     ], { held: ["twin"] });
     const r = run("two-pools", i, E, two);
-    expect(r.act[0].units.map((u) => u.atCost)).toEqual([false, true, true]);
-    expect(r.act[1].units.map((u) => u.atCost)).toEqual([false, true, true]);
-    expect(r.total).toBe(20 + 8 + 8 + 25 + 9.5 + 9.5);
+    expect(r.act[0].units.map((u) => u.atCost)).toEqual([false, true, false]); // round 3: twin allowance 1
+    expect(r.act[1].units.map((u) => u.atCost)).toEqual([false, true, false]);
+    expect(r.total).toBe(20 + 8 + 20 + 25 + 9.5 + 25); // round 3 twin: each pool F, C, F
   });
   it("interleaved lines across the two pools", () => {
     for (const held of [["twin"], ["triplet"], ["quad"]]) for (let a = 1; a <= 4; a++) for (let b = 1; b <= 4; b++) for (let c = 1; c <= 4; c++) {
@@ -447,10 +449,10 @@ describe("tiers and tags", () => {
   const lines = () => [mk(5, { product: 1, variant: 1 }), mk(5, { product: 2, variant: 2, retail: 25, cost: 9.5 })];
   const atCostCount = (r) => r.act.reduce((s, a) => s + a.units.filter((u) => u.atCost).length, 0);
   it("mixed tags take the highest tier", () => {
-    expect(atCostCount(run("twin+triplet", cart(lines(), { held: ["twin", "triplet"] })))).toBe(3);
+    expect(atCostCount(run("twin+triplet", cart(lines(), { held: ["twin", "triplet"] })))).toBe(2); // round 3: twin 1, triplet 2 -> highest is 2
     expect(atCostCount(run("twin+hero", cart(lines(), { held: ["twin", "hero"] })))).toBe(6);
     expect(atCostCount(run("triplet+amba-quad+twin", cart(lines(), { held: ["triplet", "amba-quad", "twin"] })))).toBe(6);
-    expect(atCostCount(run("amba-twin+twin-fam", cart(lines(), { held: ["amba-twin", "twin-fam"] })))).toBe(2);
+    expect(atCostCount(run("amba-twin+twin-fam", cart(lines(), { held: ["amba-twin", "twin-fam"] })))).toBe(1);
   });
   it("every tag in the query maps to the right allowance", () => {
     for (const t of TAG_QUERY) expect(atCostCount(run("tag " + t, cart(lines(), { held: [t] })))).toBe(TIER_OF[t]);
@@ -464,7 +466,7 @@ describe("tiers and tags", () => {
   it("hasTag false entries are not held", () => {
     const i = cart(lines(), { held: ["twin"] });
     const r = run("twin only", i);
-    expect(atCostCount(r)).toBe(2);
+    expect(atCostCount(r)).toBe(1);
   });
 });
 
@@ -553,6 +555,8 @@ describe("the oracle has teeth: deliberately broken copies of the module must be
     cart([mk(1, { product: 1 }), mk(1, { product: 2 }), mk(2, { product: 3, cost: 25 })], { held: ["twin"] }),
     cart([mk(2, { product: 1 }), mk(2, { product: 9, members: [GROWN] })], { held: ["triplet"] }),
     cart([mk(4, { product: 1 })], { held: ["twin"], rate: 0.65 }),
+    // Round 3: with twin allowance 1 the pool is spent after one unit, so a guard-failing line must sit right after the first unit to show up.
+    cart([mk(1, { product: 1 }), mk(2, { product: 3, cost: 25 })], { held: ["twin"] }),
   ];
   const mutants = {
     "allowance off by one (<=)": ["pool.used < maxAdditional", "pool.used <= maxAdditional"],
@@ -630,5 +634,57 @@ describe("graphql: every field the code reads is requested; ids agree", () => {
   });
   it("no leftover reads of fields that are not requested (scan the source for property reads on input objects)", () => {
     for (const bad of ["compareAtPrice", "variant.price", "totalAmount", "subtotalAmount", "sellingPlan", "attribute"]) expect(SRC_JS.includes(bad), bad).toBe(false);
+  });
+});
+
+describe("round 3 pins: allowances twin 1, triplet 2, quad-and-above 6 (every total worked by hand, retail 20, cost 8 unless stated)", () => {
+  it("twin, one product, 3 units on one line: [1 full, 1 cost, 1 full] = 20 + 8 + 20 = 48", () => {
+    const i = cart([mk(3, { product: 1, variant: 11 })], { held: ["twin"] });
+    const out = repoRun(i);
+    const items = out.operations[0].lineExpand.expandedCartItems;
+    expect(items.map((x) => [x.quantity, x.price ? x.price.adjustment.fixedPricePerUnit.amount : null])).toEqual([[1, null], [1, "8.00"], [1, null]]);
+    expect(run("pin-twin-3", i).total).toBe(48);
+  });
+  it("twin, same product on two sizes 1+1: first full (no operation), second at cost = 20 + 8 = 28", () => {
+    const i = cart([mk(1, { product: 1, variant: 11 }), mk(1, { product: 1, variant: 12 })], { held: ["twin"] });
+    const out = repoRun(i);
+    expect(out.operations.length).toBe(1);
+    expect(out.operations[0].lineExpand.cartLineId).toBe(i.cart.lines[1].id);
+    expect(out.operations[0].lineExpand.expandedCartItems.length).toBe(1);
+    expect(run("pin-twin-1+1", i).total).toBe(28);
+  });
+  it("twin, 5 units over two sizes 2+3: F C | F F F = 20+8+60 = 88 (only ONE at cost)", () => {
+    const i = cart([mk(2, { product: 1, variant: 11 }), mk(3, { product: 1, variant: 12 })], { held: ["twin"] });
+    expect(run("pin-twin-2+3", i).total).toBe(88);
+  });
+  it("triplet, 4 units across two colours, 2+2 (A cost 8 retail 20, B cost 9.50 retail 25): F20, C8 | C9.50, F25 = 62.50", () => {
+    const i = cart([mk(2, { product: 1 }), mk(2, { product: 2, retail: 25, cost: 9.5 })], { held: ["triplet"] });
+    expect(run("pin-triplet-2+2", i).total).toBe(62.5);
+  });
+  it("triplet, 4 units across two colours, 1+3: F20 | C9.50, C9.50, F25 = 64.00", () => {
+    const i = cart([mk(1, { product: 1 }), mk(3, { product: 2, retail: 25, cost: 9.5 })], { held: ["triplet"] });
+    expect(run("pin-triplet-1+3", i).total).toBe(64);
+  });
+  it("triplet, 4 units across two colours, 3+1: F20, C8, C8 | F25 = 61.00 (second colour gets nothing)", () => {
+    const i = cart([mk(3, { product: 1 }), mk(1, { product: 2, retail: 25, cost: 9.5 })], { held: ["triplet"] });
+    const r = run("pin-triplet-3+1", i);
+    expect(r.total).toBe(61);
+    expect(r.act[1].op).toBeNull();
+  });
+  it("twin + triplet tags together: highest tier is triplet = 2 at cost; 5 units = F C C F F = 20+8+8+20+20 = 76", () => {
+    const i = cart([mk(5, { product: 1 })], { held: ["twin", "triplet"] });
+    expect(run("pin-twin+triplet", i).total).toBe(76);
+  });
+  it("twin tag + quad tag together: 6 at cost; 8 units = F + 6C + F = 20 + 48 + 20 = 88", () => {
+    const i = cart([mk(8, { product: 1 })], { held: ["twin", "quad"] });
+    expect(run("pin-twin+quad", i).total).toBe(88);
+  });
+  it("quad unchanged at 6: 3+3 = 60.00 and 9 units = F + 6C + 2F = 20+48+40 = 108", () => {
+    expect(run("pin-quad-3+3", cart([mk(3, { product: 1, variant: 11 }), mk(3, { product: 1, variant: 12 })], { held: ["quad"] })).total).toBe(60);
+    expect(run("pin-quad-9", cart([mk(9, { product: 1 })], { held: ["quad"] })).total).toBe(108);
+  });
+  it("the module under test really carries 1/2/6 (probe: unit counts at cost for 10 units per tier)", () => {
+    const count = (held) => repoRun(cart([mk(10, { product: 1 })], { held })).operations[0].lineExpand.expandedCartItems.filter((x) => x.price).reduce((s, x) => s + x.quantity, 0);
+    expect([count(["twin"]), count(["triplet"]), count(["quad"])]).toEqual([1, 2, 6]);
   });
 });
