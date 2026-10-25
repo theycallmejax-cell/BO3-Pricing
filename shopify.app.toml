@@ -13,7 +13,7 @@ redirect_urls = ["https://td5h8u-tb.myshopify.com/auth/callback"]
 
 
 [webhooks]
-api_version = "2025-01"
+api_version = "2026-07"
 
 
 [pos]
