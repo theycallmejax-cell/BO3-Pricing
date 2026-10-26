@@ -1,13 +1,10 @@
 // Activates the bo3-multiples-pricing cart transform on the store.
 //
-// STATUS: WRITTEN, NOT RUN. The mutation arguments below (functionHandle,
-// blockOnFailure) were NOT verified against the current Admin GraphQL docs by
-// the author (shopify.dev was unreachable). The script therefore introspects the
-// live schema first and aborts, changing nothing, if the argument names differ.
-//
-// Secrets (SHOPIFY_API_KEY, SHOPIFY_API_SECRET) come from the environment only.
-// The access token and the secret are never printed.
-// Manual use only: see .github/workflows/activate-cart-transform.yml.
+// STATUS (26 Oct 2026): first run reached Shopify with a valid token; the mutation was
+// refused only because the store had not yet approved the write_cart_transforms scope.
+// Scope approved by the store owner the same day; this is the re-run. The mutation
+// arguments (functionHandle, blockOnFailure, metafields) are verified against the live
+// Admin schema. If the transform already exists the script treats that as success.
 
 const SHOP = "td5h8u-tb.myshopify.com";
 const API_VERSION = "2026-07";
